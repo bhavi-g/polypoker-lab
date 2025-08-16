@@ -1,0 +1,32 @@
+{
+  "name": "polypoker-lab",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/cli/demo.ts",
+    "test": "vitest",
+    "play": "ts-node src/cli/play_hand.ts",
+    "play:heads": "ts-node src/cli/heads_up.ts",
+    "play:table": "ts-node src/cli/table_simple.ts",
+    "eval:rig:omaha": "ts-node src/cli/omaha_eval_rig.ts",
+    "play:omaha": "ts-node src/cli/play_omaha_unified.ts",
+    "play:variant": "ts-node src/cli/play_variant.ts",
+    "play:texas:unified": "ts-node src/cli/play_texas_unified.ts",
+    "play:omaha:unified": "ts-node src/cli/play_omaha_unified.ts",
+    "play:texas": "ts-node src/cli/play_texas_unified.ts",
+    "play:texas:snap": "SNAPSHOT=1 ts-node src/cli/play_texas_unified.ts",
+    "play:omaha:snap": "SNAPSHOT=1 ts-node src/cli/play_omaha_unified.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "type": "commonjs"
+}
