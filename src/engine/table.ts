@@ -271,15 +271,34 @@ function showdownWithSidePots(
 
   const evalAll = strategy.evaluate(survivorsIdx.map(i=>holes[i]), board5);
 
+  // console.log('\n--- SHOWDOWN ---');
+  // console.log('Showdown order: ' + showOrder.map(i=>tablePlayers[i].name).join(' → '));
+  // for (const seat of showOrder){
+  //   const posInEval = survivorsIdx.indexOf(seat);
+  //   const res = evalAll.results[posInEval];
+  //   console.log(`${tablePlayers[seat].name}: ${res.bestFive.map(cardStr).join(' ')}  → ${strategy.prettyScore(res.score)}`);
+  //   // telemetry: reveal shown hand
+  //   T.showPlayer(tablePlayers[seat].name, res.bestFive, strategy.prettyScore(res.score));
+  // }
+
   console.log('\n--- SHOWDOWN ---');
   console.log('Showdown order: ' + showOrder.map(i=>tablePlayers[i].name).join(' → '));
-  for (const seat of showOrder){
+  for (const seat of showOrder) {
     const posInEval = survivorsIdx.indexOf(seat);
     const res = evalAll.results[posInEval];
-    console.log(`${tablePlayers[seat].name}: ${res.bestFive.map(cardStr).join(' ')}  → ${strategy.prettyScore(res.score)}`);
-    // telemetry: reveal shown hand
+
+    // Optional CLI print of best five (debug only)
+    if (process.env.DEBUG_SHOWDOWN === '1') {
+      console.log(`${tablePlayers[seat].name}: ${res.bestFive.map(cardStr).join(' ')}  → ${strategy.prettyScore(res.score)}`);
+    }
+
+    // Telemetry: best-five/category (existing)
     T.showPlayer(tablePlayers[seat].name, res.bestFive, strategy.prettyScore(res.score));
+
+    // NEW: public reveal of the player's hole cards at showdown
+    T.revealHole(tablePlayers[seat].name, holes[seat], 'showdown');
   }
+
 
   pots.forEach((pot, k)=>{
     const eligPositions = pot.eligIdx
@@ -397,7 +416,21 @@ export async function runTable(strategy: VariantStrategy){
     T.street('preflop');
     T.snapshot(strategy.name, players[dealerRef.idx].name, players, { flop: [] }, 0);
     let br = await bettingRound(players, firstPre, BB, raiseCap);
-    if (br.ended) { awardByFold(players); T.endHand(); await betweenHands(); continue; }
+    if (br.ended) {
+      awardByFold(players);
+      T.endHand();
+      await betweenHands();
+    
+      // run the lobby every time a hand ends
+      const lobby = await postHandLobby(players, dealerRef, tableBuyIn);
+      players = lobby.table;
+      if (!lobby.continue) break;
+    
+      // advance dealer for next hand
+      dealerRef.idx = leftOf(dealerRef.idx, players.length);
+      continue;
+    }
+    
 
     // FLOP
     resetStreet(players);
@@ -406,7 +439,21 @@ export async function runTable(strategy: VariantStrategy){
     T.street('flop'); T.boardFlop(deal.board.flop);
     T.snapshot(strategy.name, players[dealerRef.idx].name, players, { flop: deal.board.flop }, br.currentBet);
     br = await bettingRound(players, firstPost, BB, raiseCap);
-    if (br.ended) { awardByFold(players); T.endHand(); await betweenHands(); continue; }
+    if (br.ended) {
+      awardByFold(players);
+      T.endHand();
+      await betweenHands();
+    
+      // run the lobby every time a hand ends
+      const lobby = await postHandLobby(players, dealerRef, tableBuyIn);
+      players = lobby.table;
+      if (!lobby.continue) break;
+    
+      // advance dealer for next hand
+      dealerRef.idx = leftOf(dealerRef.idx, players.length);
+      continue;
+    }
+    
 
     // TURN
     resetStreet(players);
@@ -416,7 +463,21 @@ export async function runTable(strategy: VariantStrategy){
     T.street('turn'); T.boardTurn(deal.board.turn!, deal.board.flop);
     T.snapshot(strategy.name, players[dealerRef.idx].name, players, { flop: deal.board.flop, turn: deal.board.turn }, br.currentBet);
     br = await bettingRound(players, firstPost, BB, raiseCap);
-    if (br.ended) { awardByFold(players); T.endHand(); await betweenHands(); continue; }
+    if (br.ended) {
+      awardByFold(players);
+      T.endHand();
+      await betweenHands();
+    
+      // run the lobby every time a hand ends
+      const lobby = await postHandLobby(players, dealerRef, tableBuyIn);
+      players = lobby.table;
+      if (!lobby.continue) break;
+    
+      // advance dealer for next hand
+      dealerRef.idx = leftOf(dealerRef.idx, players.length);
+      continue;
+    }
+    
 
     // RIVER
     resetStreet(players);

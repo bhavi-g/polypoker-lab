@@ -1,84 +1,124 @@
-import type { Card } from '../core/card';
+// src/engine/telemetry.ts
+import fs from 'fs';
+import path from 'path';
 
-const enabled = process.env.SNAPSHOT === '1' || String(process.env.SNAPSHOT).toLowerCase() === 'true';
+const SNAPSHOT = process.env.SNAPSHOT === '1';
+const HANDLOG  = process.env.HANDLOG  === '1';
 
-function enc(c: Card){ return String(c.rank) + String(c.suit); }
-function encArr(cs: Card[]){ return cs.map(enc); }
-
-export function startHand(dealerName: string, sb: number, bb: number, ante: number){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'hand_start', dealerName, sb, bb, ante }));
+function todayFile() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const dir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return path.join(dir, `${yyyy}-${mm}-${dd}.handlog.jsonl`);
 }
 
-export function postBlindOrAnte(player: string, amount: number, kind: 'sb'|'bb'|'ante'){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'forced', player, kind, amount }));
+function write(line: any) {
+  if (HANDLOG) fs.appendFileSync(todayFile(), JSON.stringify(line) + '\n');
 }
 
-export function street(name: 'preflop'|'flop'|'turn'|'river'){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'street', name }));
+function cardToStr(c: any): string {
+  if (!c) return '';
+  if (typeof c === 'string') return c;
+  return String(c.rank) + String(c.suit);
 }
 
-export function boardFlop(flop: Card[]){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'board', stage:'flop', cards: encArr(flop) }));
+function cardsToStr(cs: any[]): string[] {
+  return (cs ?? []).map(cardToStr);
 }
 
-export function boardTurn(turn: Card, flop: Card[]){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'board', stage:'turn', cards: [...encArr(flop), enc(turn)] }));
+export function startHand(dealerName: string, sb: number, bb: number, ante: number) {
+  const evt = { t: 'hand_start', dealerName, sb, bb, ante };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
 }
 
-export function boardRiver(flop: Card[], turn: Card, river: Card){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'board', stage:'river', cards: [...encArr(flop), enc(turn), enc(river)] }));
+export function postBlindOrAnte(player: string, amount: number, kind: 'sb'|'bb'|'ante') {
+  const evt = { t: 'forced', player, kind, amount };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
 }
 
-/** Light snapshot of current table for frontends/logs */
+export function street(name: 'preflop'|'flop'|'turn'|'river') {
+  const evt = { t: 'street', name };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
+}
+
+export function boardFlop(cards: any[]) {
+  const evt = { t: 'board', stage: 'flop', cards: cardsToStr(cards) };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
+}
+
+export function boardTurn(turn: any, flop: any[]) {
+  const evt = { t: 'board', stage: 'turn', cards: [...cardsToStr(flop), cardToStr(turn)] };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
+}
+
+export function boardRiver(flop: any[], turn: any, river: any) {
+  const evt = { t: 'board', stage: 'river', cards: [...cardsToStr(flop), cardToStr(turn), cardToStr(river)] };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
+}
+
 export function snapshot(
   variant: string,
   dealerName: string,
-  players: Array<{name:string, stack:number, inHand:boolean, streetCommit:number, totalCommit:number, hole: Card[]}>,
-  board: { flop?: Card[], turn?: Card|null, river?: Card|null },
+  players: any[],
+  board: { flop: any[], turn?: any|null, river?: any|null },
   currentBet: number
-){
-  if (!enabled) return;
-  const snap = {
+) {
+  const publicPlayers = players.map(p => ({
+    name: p.name,
+    stack: p.stack,
+    inHand: p.inHand,
+    streetCommit: p.streetCommit,
+    totalCommit: p.totalCommit,
+    isAllIn: (p.stack ?? 0) <= 0
+  }));
+
+  const evt = {
     t: 'snapshot',
     variant,
     dealerName,
     currentBet,
-    totalPot: Number(players.reduce((s,p)=> s + (p.totalCommit||0), 0).toFixed(2)),
-    players: players.map(p=>({
-      name: p.name,
-      stack: p.stack,
-      inHand: p.inHand,
-      streetCommit: p.streetCommit,
-      totalCommit: p.totalCommit,
-      isAllIn: p.stack <= 0,
-      // hole intentionally omitted for privacy in shared terminals
-    })),
+    totalPot: publicPlayers.reduce((s,p)=> s + (p.totalCommit||0), 0),
+    players: publicPlayers,
     board: {
-      flop: board.flop ? encArr(board.flop) : [],
-      turn: board.turn ? enc(board.turn) : null,
-      river: board.river ? enc(board.river) : null
+      flop: cardsToStr(board.flop || []),
+      turn: board.turn == null ? null : cardToStr(board.turn),
+      river: board.river == null ? null : cardToStr(board.river),
     }
   };
-  console.log(JSON.stringify(snap));
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
 }
 
-export function showPlayer(player: string, bestFive: Card[], catPretty: string){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'show', player, best: encArr(bestFive), category: catPretty }));
+export function showPlayer(player: string, bestFive: any[], category: string) {
+  const evt = { t: 'show', player, best: cardsToStr(bestFive), category };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
 }
 
-export function awardPot(idx: number, amount: number, winners: string[]){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'pot', idx, amount, winners }));
+export function awardPot(idx: number, amount: number, winners: string[]) {
+  const evt = { t: 'pot', idx, amount, winners };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
 }
 
-export function endHand(){
-  if (!enabled) return;
-  console.log(JSON.stringify({ t:'hand_end' }));
+export function endHand() {
+  const evt = { t: 'hand_end' };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
+}
+
+// NEW: reveal hole cards at showdown
+export function revealHole(player: string, hole: any[], reason: 'showdown'|'all-in'|'voluntary' = 'showdown') {
+  const evt = { t: 'reveal', player, cards: cardsToStr(hole), reason };
+  if (SNAPSHOT) console.log(JSON.stringify(evt));
+  write(evt);
 }
